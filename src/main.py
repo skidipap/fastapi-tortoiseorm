@@ -1,18 +1,49 @@
-from fastapi import FastAPI
-from tortoise.contrib.fastapi import register_tortoise
-from config.db import DB_CONFIG
-from config.settings import Settings
-import uvicorn
+from fastapi import FastAPI 
 
-settings = Settings()
-app = FastAPI(title=settings.APP_NAME)
+from config.db import init_db 
+import logging
 
-register_tortoise(
-    app,
-    config=DB_CONFIG,
-    generate_schemas=False,
-)
+log = logging.getLogger(__name__)
 
-w
-if __name__ == '__main__':
-    uvicorn.run(app, host=settings.HOST, port=settings.PORT)
+
+def create_application() -> FastAPI:
+    application = FastAPI(
+        title="IndoAnalytics"
+    )
+
+    return application
+
+
+app = create_application()
+
+@app.on_event("startup")
+async def startup_event():
+    print("Starting up...")
+    init_db(app)
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    print("Shutting down...")
+
+
+@app.get('/')
+def index():
+    return {
+        'index': 'welcome'
+    }
+
+from models.models import UserInSchema, UserSchema, Users
+
+@app.post('/users', response_model=UserSchema)
+async def create_user(user: UserInSchema):
+    user_obj = await Users.create(**user.dict(exclude_unset=True))
+    return await UserSchema.from_tortoise_orm(user_obj)
+
+from typing import List
+
+
+@app.get("/users", response_model=List[UserSchema])
+async def get_users():
+    return await UserSchema.from_queryset(Users.all())
+
